@@ -123,19 +123,19 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 /* ================= Интерфейс ================= */
 const $ = sel => document.querySelector(sel);
 const view = $('#view');
-const ui = { tab: 'today', date: today(), week: weekStart(today()), calHabit: null, calMonth: new Date(today().getFullYear(), today().getMonth(), 1) };
+const ui = { tab: 'today', date: today(), week: weekStart(today()), calHabit: null, calMonth: new Date(today().getFullYear(), today().getMonth(), 1), statsMode: 'week', statsDate: today(), chartSel: null };
 
 function setTab(tab) {
   if (tab === 'add') { openEditor(null); return; }
   ui.tab = tab;
-  document.querySelectorAll('.tab[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   render();
   window.scrollTo(0, 0);
 }
-document.querySelectorAll('.tab[data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 
 function render() {
-  ({ today: renderToday, week: renderWeek, calendar: renderCalendar, settings: renderSettings })[ui.tab]();
+  ({ today: renderToday, week: renderWeek, calendar: renderCalendar, stats: renderStats, settings: renderSettings })[ui.tab]();
 }
 
 function emptyState() {
@@ -252,6 +252,110 @@ function renderCalendar() {
   view.innerHTML = html;
 }
 
+/* ----- Статистика ----- */
+// Итог по привычке за период [from, to] (включительно).
+// done — выполнено в счёт плана, left — ещё можно успеть, missed — пропущено.
+function statsRange(h, from, to) {
+  const t = today(), created = parseYmd(h.createdAt || ymd(t));
+  const r = { plan: 0, done: 0, left: 0, missed: 0 };
+  if (h.mode === 'days') {
+    let doneOnPlan = 0, extra = 0, missedRaw = 0;
+    for (let d = new Date(from); d <= to; d = addDays(d, 1)) {
+      const planned = h.days.includes(dayIdx(d)) && d >= created;
+      const on = isDone(h, d);
+      if (planned) { r.plan++; if (on) doneOnPlan++; else if (d < t) missedRaw++; }
+      else if (on) extra++;
+    }
+    r.done = Math.min(doneOnPlan + extra, r.plan);       // лишние дни засчитываются в план
+    r.missed = Math.min(missedRaw, r.plan - r.done);
+    r.left = r.plan - r.done - r.missed;
+  } else {
+    // недели, чей понедельник попадает в период
+    for (let w = weekStart(from); w <= to; w = addDays(w, 7)) {
+      if (w < from || addDays(w, 6) < created) continue;
+      const d = Math.min(weekDone(h, w), h.times);
+      r.plan += h.times; r.done += d;
+      if (addDays(w, 7) <= t) r.missed += h.times - d; else r.left += h.times - d;
+    }
+  }
+  return r;
+}
+function statsPeriod() {
+  const d = ui.statsDate;
+  if (ui.statsMode === 'week') { const s = weekStart(d); return { from: s, to: addDays(s, 6) }; }
+  return { from: new Date(d.getFullYear(), d.getMonth(), 1), to: new Date(d.getFullYear(), d.getMonth() + 1, 0) };
+}
+function sumStats(list) {
+  return list.reduce((a, r) => ({ plan: a.plan + r.plan, done: a.done + r.done, left: a.left + r.left, missed: a.missed + r.missed }), { plan: 0, done: 0, left: 0, missed: 0 });
+}
+const pctOf = r => (r.plan ? Math.round(r.done / r.plan * 100) : 0);
+
+function renderStats() {
+  const { from, to } = statsPeriod(), t = today();
+  const isWeek = ui.statsMode === 'week';
+  const current = isWeek ? sameDay(from, weekStart(t)) : (from.getMonth() === t.getMonth() && from.getFullYear() === t.getFullYear());
+  const title = isWeek ? `${fmtDate(from)} — ${fmtDate(to)}` : `${MONTHS[from.getMonth()]} ${from.getFullYear()}`;
+  let html = `<h1>Статистика</h1>
+    <div class="seg seg-btns" style="margin-top:12px">
+      <button class="${isWeek ? 'on' : ''}" data-act="smode" data-n="week">Неделя</button>
+      <button class="${!isWeek ? 'on' : ''}" data-act="smode" data-n="month">Месяц</button>
+    </div>
+    <div class="head" style="margin-top:12px">
+      <button class="nav-btn" data-act="speriod" data-n="-1" aria-label="Предыдущий период">‹</button>
+      <div class="title"><h2>${title}</h2>
+        ${current ? '' : `<button class="pill" data-act="speriod" data-n="0">${isWeek ? 'Текущая неделя' : 'Текущий месяц'}</button>`}</div>
+      <button class="nav-btn" data-act="speriod" data-n="1" aria-label="Следующий период">›</button>
+    </div>`;
+  if (!state.habits.length) { view.innerHTML = html + emptyState(); return; }
+
+  const rows = state.habits.map(h => ({ h, r: statsRange(h, from, to) }));
+  const tot = sumStats(rows.map(x => x.r));
+  const p = pctOf(tot);
+  html += `<div class="tiles">
+      <div class="tile t-done"><span class="ico">✅</span><b>${tot.done}</b><span>выполнено</span></div>
+      <div class="tile t-left"><span class="ico">⏳</span><b>${tot.left}</b><span>осталось</span></div>
+      <div class="tile t-miss"><span class="ico">❌</span><b>${tot.missed}</b><span>пропущено</span></div>
+    </div>
+    <div class="summary"><div class="sum-row"><b>${p}%</b><span class="muted">плана выполнено · ${tot.done} из ${tot.plan}</span></div>
+      <div class="stack" role="img" aria-label="Выполнено ${tot.done}, осталось ${tot.left}, пропущено ${tot.missed}">
+        ${tot.plan ? `<i class="s-done" style="flex:${tot.done}"></i><i class="s-left" style="flex:${tot.left}"></i><i class="s-miss" style="flex:${tot.missed}"></i>` : ''}
+      </div></div>`;
+
+  html += `<h3>По привычкам</h3><div class="panel tbl-panel"><table class="stbl">
+    <thead><tr><th>Привычка</th><th title="Выполнено">✅</th><th title="Осталось">⏳</th><th title="Пропущено">❌</th><th>План</th></tr></thead><tbody>` +
+    rows.map(({ h, r }) => `<tr><td class="hname">${esc(h.name)}<small>${esc(freqText(h))}</small></td>
+      <td class="n-done">${r.done}</td><td>${r.left}</td><td class="${r.missed ? 'n-miss' : ''}">${r.missed}</td>
+      <td><b>${pctOf(r)}%</b><small>${r.done}/${r.plan}</small></td></tr>`).join('') +
+    `</tbody></table></div>`;
+
+  // График: % выполнения плана за 8 недель, заканчивая неделей выбранного периода (но не позже текущей)
+  const endRef = to < t ? to : t;
+  const lastW = weekStart(endRef);
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const w = addDays(lastW, -7 * i);
+    const r = sumStats(state.habits.map(h => statsRange(h, w, addDays(w, 6))));
+    weeks.push({ w, r, p: r.plan ? pctOf(r) : null });
+  }
+  if (ui.chartSel == null || ui.chartSel > 7) ui.chartSel = 7;
+  const sel = weeks[ui.chartSel];
+  html += `<h3>Последние 8 недель</h3><div class="panel chart-panel">
+    <div class="chart-cap">${sel.p == null ? 'Нет плана' : `<b>${sel.p}%</b> · ${sel.r.done} из ${sel.r.plan}`}
+      <span class="muted">· ${fmtDate(sel.w)} — ${fmtDate(addDays(sel.w, 6))}</span></div>
+    <div class="chart" role="img" aria-label="Процент выполнения плана по неделям">
+      <div class="gridline" style="bottom:100%"><span>100%</span></div>
+      <div class="gridline" style="bottom:50%"><span>50%</span></div>
+      ${weeks.map((x, i) => `<button class="bar-col ${i === ui.chartSel ? 'sel' : ''}" data-act="chartsel" data-n="${i}"
+          aria-label="${fmtDate(x.w)}: ${x.p == null ? 'нет плана' : x.p + '%'}">
+          <i class="b ${sameDay(x.w, weekStart(t)) ? 'cur' : ''}" style="height:${x.p == null ? 0 : Math.max(x.p, 2)}%"></i>
+        </button>`).join('')}
+    </div>
+    <div class="chart-x">${weeks.map(x => `<span>${x.w.getDate()}.${pad(x.w.getMonth() + 1)}</span>`).join('')}</div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">Подпись — понедельник недели. Нажмите на столбик, чтобы увидеть цифры.</p>
+  </div>`;
+  view.innerHTML = html;
+}
+
 /* ----- Настройки ----- */
 function renderSettings() {
   const perm = 'Notification' in window ? Notification.permission : 'unsupported';
@@ -297,6 +401,13 @@ view.addEventListener('click', e => {
     case 'week': ui.week = +n === 0 ? weekStart(today()) : addDays(ui.week, 7 * n); render(); break;
     case 'month': ui.calMonth = new Date(ui.calMonth.getFullYear(), ui.calMonth.getMonth() + +n, 1); render(); break;
     case 'calhabit': ui.calHabit = id; render(); break;
+    case 'smode': ui.statsMode = n; ui.chartSel = null; render(); break;
+    case 'speriod':
+      if (+n === 0) ui.statsDate = today();
+      else if (ui.statsMode === 'week') ui.statsDate = addDays(ui.statsDate, 7 * n);
+      else ui.statsDate = new Date(ui.statsDate.getFullYear(), ui.statsDate.getMonth() + +n, 1);
+      ui.chartSel = null; render(); break;
+    case 'chartsel': ui.chartSel = +n; render(); break;
     case 'perm': requestNotifications().then(render); break;
     case 'testalarm': showAlarm({ id: '__test', name: 'Проверка будильника', reminder: { time: `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}` } }); break;
     case 'export': exportData(); break;

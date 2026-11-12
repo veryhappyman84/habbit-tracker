@@ -17,6 +17,11 @@
 <body>
   <div id="soundBanner" class="banner" hidden>🔈 Коснитесь экрана, чтобы включить звук будильника</div>
 
+  <header class="appbar">
+    <span class="appbar-title">Трекер привычек</span>
+    <button id="settingsBtn" class="icon-btn gear" data-tab="settings" aria-label="Настройки">⚙</button>
+  </header>
+
   <main id="view" class="view"></main>
 
   <nav class="tabbar">
@@ -24,7 +29,7 @@
     <button data-tab="week" class="tab"><span class="ti">▦</span><span>Неделя</span></button>
     <button data-tab="add" class="tab tab-add" aria-label="Добавить привычку"><span class="ti">＋</span></button>
     <button data-tab="calendar" class="tab"><span class="ti">◫</span><span>Календарь</span></button>
-    <button data-tab="settings" class="tab"><span class="ti">⚙</span><span>Настройки</span></button>
+    <button data-tab="stats" class="tab"><span class="ti">▥</span><span>Статистика</span></button>
   </nav>
 
   <!-- Редактор привычки -->
