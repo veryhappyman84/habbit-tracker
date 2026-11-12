@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4f6bed">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Привычки">
+  <title>Трекер привычек</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="soundBanner" class="banner" hidden>🔈 Коснитесь экрана, чтобы включить звук будильника</div>
+
+  <main id="view" class="view"></main>
+
+  <nav class="tabbar">
+    <button data-tab="today" class="tab"><span class="ti">✓</span><span>Сегодня</span></button>
+    <button data-tab="week" class="tab"><span class="ti">▦</span><span>Неделя</span></button>
+    <button data-tab="add" class="tab tab-add" aria-label="Добавить привычку"><span class="ti">＋</span></button>
+    <button data-tab="calendar" class="tab"><span class="ti">◫</span><span>Календарь</span></button>
+    <button data-tab="settings" class="tab"><span class="ti">⚙</span><span>Настройки</span></button>
+  </nav>
+
+  <!-- Редактор привычки -->
+  <div id="sheet" class="sheet-wrap" hidden>
+    <form id="habitForm" class="sheet" autocomplete="off">
+      <div class="sheet-head">
+        <h2 id="sheetTitle">Новая привычка</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Закрыть">✕</button>
+      </div>
+
+      <label class="field">
+        <span class="label">Название</span>
+        <input id="fName" type="text" maxlength="60" placeholder="Например, отжимания" required>
+      </label>
+
+      <div class="field">
+        <span class="label">Как часто</span>
+        <div class="seg">
+          <label><input type="radio" name="mode" value="weekly" checked><span>N раз в неделю</span></label>
+          <label><input type="radio" name="mode" value="days"><span>По дням недели</span></label>
+        </div>
+      </div>
+
+      <div class="field" id="weeklyBox">
+        <span class="label">Сколько раз в неделю</span>
+        <div class="stepper">
+          <button type="button" id="tMinus" aria-label="Меньше">−</button>
+          <output id="tVal">3</output>
+          <button type="button" id="tPlus" aria-label="Больше">+</button>
+        </div>
+      </div>
+
+      <div class="field" id="daysBox" hidden>
+        <span class="label">В какие дни</span>
+        <div class="chips" id="dayChips"></div>
+      </div>
+
+      <div class="field">
+        <span class="label">Напоминание</span>
+        <div class="row">
+          <input id="fTime" type="time">
+          <button type="button" class="link-btn" id="clearTime">убрать</button>
+        </div>
+      </div>
+
+      <div id="reminderBox" hidden>
+        <label class="switch">
+          <input id="fAlarm" type="checkbox">
+          <span>⏰ Будильник со звуком <small>(срабатывает, когда приложение открыто)</small></span>
+        </label>
+        <div class="cal-btns">
+          <button type="button" class="btn btn-outline" id="gcalBtn">📅 Добавить в Google Calendar</button>
+          <button type="button" class="btn btn-ghost" id="icsBtn">Скачать .ics (любой календарь)</button>
+        </div>
+      </div>
+
+      <p id="formError" class="error" hidden></p>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-danger" id="deleteBtn" hidden>Удалить</button>
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Будильник -->
+  <div id="alarm" class="alarm" hidden>
+    <div class="alarm-card">
+      <div class="alarm-bell">⏰</div>
+      <div class="alarm-time" id="alarmTime"></div>
+      <div class="alarm-name" id="alarmName"></div>
+      <div class="alarm-sub" id="alarmSub"></div>
+      <button class="btn btn-primary big" id="alarmDone">✓ Выполнено</button>
+      <button class="btn btn-outline big" id="alarmSnooze">Отложить на 10 минут</button>
+      <button class="btn btn-ghost" id="alarmClose">Закрыть</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
